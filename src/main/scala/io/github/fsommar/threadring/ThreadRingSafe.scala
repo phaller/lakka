@@ -1,14 +1,14 @@
 /**
  * Author: Philipp Haller
  */
-package lacasa.akka.threadring
+package io.github.fsommar.threadring
 
 import akka.actor.{ActorSystem, Props}
 import akka.event.Logging
 
 import scala.spores._
 
-import lacasa.{Box, CanAccess, Safe, NoReturnControl, Utils}
+import lacasa.{Box, CanAccess, Safe, Utils}
 import Box._
 
 import lacasa.akka.{SafeActor, SafeActorRef}
@@ -120,40 +120,48 @@ private class ThreadRingActor(id: Int, numActorsInRing: Int) extends SafeActor[M
 
 }
 
+private class PingStartActor(numActorsInRing: Int) extends SafeActor[Any] {
+
+  override def init() = {
+    import context._
+
+    val ringActors = Array.tabulate[SafeActorRef[Message]](numActorsInRing)(i => {
+      SafeActorRef[Message](system.actorOf(Props(new ThreadRingActor(i, numActorsInRing))))
+    })
+
+    val iter = ringActors.view.zipWithIndex.toIterator
+    Utils.loopAndThen(iter)({ elem =>
+      val (loopActor, i) = elem
+      val nextActor = ringActors((i + 1) % numActorsInRing)
+      mkBoxOf(new DataMessage(nextActor)) { packed =>
+        implicit val access = packed.access
+        val box: packed.box.type = packed.box
+        loopActor ! box
+      }
+    })({ () =>
+      mkBoxOf(new PingMessage(10)) { packed =>
+        implicit val access = packed.access
+        val box: packed.box.type = packed.box
+        ringActors(0) ! box
+      }
+    })
+  }
+
+  override def receive(box: Box[Any])(implicit acc: CanAccess { type C = box.C }) = ???
+
+}
+
 object ThreadRing {
 
   def main(args: Array[String]): Unit = {
     val system = ActorSystem("ThreadRing")
 
-    val numActorsInRing = /* ThreadRingConfig.N */ 2
-    val ringActors = Array.tabulate[SafeActorRef[Message]](numActorsInRing)(i => {
-      SafeActorRef[Message](system.actorOf(Props(new ThreadRingActor(i, numActorsInRing))))
-    })
+    val pingStartActor = SafeActorRef[Any](system.actorOf(Props(
+      new PingStartActor(/* ThreadRingConfig.N */ 2))))
 
-    try {
-      // send `DataMessage` to each ring actor
-      val iter = ringActors.view.zipWithIndex.toIterator
-      Utils.loopAndThen(iter)({ elem =>
-        val (loopActor, i) = elem
-        val nextActor = ringActors((i + 1) % numActorsInRing)
-        mkBoxOf(new DataMessage(nextActor)) { packed =>
-          implicit val access = packed.access
-          val box: packed.box.type = packed.box
-          loopActor ! box
-        }
-      })({ () =>
-        mkBoxOf(new PingMessage(10)) { packed =>
-          implicit val access = packed.access
-          val box: packed.box.type = packed.box
-          ringActors(0) ! box
-        }
-      })
-    } catch {
-      case _: NoReturnControl =>
-        Box.uncheckedCatchControl
-        Thread.sleep(2000)
-        system.terminate()
-    }
+    SafeActorRef.init(pingStartActor)
+    Thread.sleep(2000)
+    system.terminate()
   }
 
 }
