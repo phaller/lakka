@@ -15,6 +15,7 @@ import lacasa.akka.{SafeActor, SafeActorRef}
 
 
 object Message {
+  implicit val messageIsSafe = new Safe[Message] {}
   implicit val pingMessageIsSafe = new Safe[PingMessage] {}
   implicit val exitMessageIsSafe = new Safe[ExitMessage] {}
   implicit val dataMessageIsSafe = new Safe[DataMessage] {}
@@ -86,18 +87,10 @@ private class ThreadRingActor(id: Int, numActorsInRing: Int) extends SafeActor[M
     // carry out `action`
     action match {
       case SendPingMessage(pm) =>
-        mkBoxOf(pm) { packed =>
-          implicit val access = packed.access
-          val box: packed.box.type = packed.box
-          nextActor ! box
-        }
+        nextActor >!< pm
 
       case SendExitMessage(em) =>
-        mkBoxOf(em) { packed =>
-          implicit val access = packed.access
-          val box: packed.box.type = packed.box
-          nextActor ! box
-        }
+        nextActor >!< em
 
       case SendLastExitMessage(em) =>
         mkBoxOf(em) { packed =>
