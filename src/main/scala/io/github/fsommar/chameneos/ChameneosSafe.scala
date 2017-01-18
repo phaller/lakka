@@ -76,16 +76,10 @@ object ChameneosSafe {
               numMeetingsLeft -= 1
               val wc = waitingChameneo.get
               waitingChameneo = None
-              mkBoxOf(message) { packed => 
-                implicit val acc = packed.access
-                wc ! packed.box
-              }
+              wc >!< message
             }
           } else {
-            mkBoxOf(new ExitMsg(SafeActorRef[Message](self))) { packed =>
-              implicit val acc = packed.access
-              message.sender ! packed.box
-            }
+            message.sender >!< new ExitMsg(SafeActorRef[Message](self))
           }
         case _ => ???
       }
@@ -99,10 +93,7 @@ object ChameneosSafe {
     private var meetings: Int = 0
 
     override def init() = {
-      mkBoxOf(new MeetMsg(color, SafeActorRef[Message](self))) { packed =>
-        implicit val acc = packed.access
-        mall ! packed.box
-      }
+      mall >!< new MeetMsg(color, SafeActorRef[Message](self))
     }
 
     override def receive(box: Box[Message])(implicit acc: CanAccess { type C = box.C }): Unit = {
@@ -124,10 +115,7 @@ object ChameneosSafe {
         case message: ChangeMsg =>
           color = message.color
           meetings += 1
-          mkBoxOf(new MeetMsg(color, selfAR)) { packed =>
-            implicit val acc = packed.access
-            mall ! packed.box
-          }
+          mall >!< new MeetMsg(color, selfAR)
         case message: ExitMsg =>
           color = FADED
           log.info(s"Chameneo #${id} is now a faded color.")
