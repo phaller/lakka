@@ -29,4 +29,4 @@ logLevel := Level.Info
 logLevel in compile := Level.Info
 logLevel in test := Level.Info
 
-cancelable := true
+cancelable in Global := true
