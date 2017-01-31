@@ -87,10 +87,10 @@ private class ThreadRingActor(id: Int, numActorsInRing: Int) extends SafeActor[M
     // carry out `action`
     action match {
       case SendPingMessage(pm) =>
-        nextActor >!< pm
+        nextActor ! pm
 
       case SendExitMessage(em) =>
-        nextActor >!< em
+        nextActor ! em
 
       case SendLastExitMessage(em) =>
         mkBoxOf(em) { packed =>

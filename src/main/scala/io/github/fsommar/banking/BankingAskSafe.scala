@@ -71,7 +71,7 @@ object BankingAskSafe {
           numCompletedBankings += 1
           if (numCompletedBankings == numBankings) {
             Utils.loopAndThen(accounts.toIterator)({ account =>
-              account >!< new StopMsg()
+              account ! new StopMsg()
             }) { () =>
               log.info("stopping")
               context.stop(self)
@@ -95,7 +95,7 @@ object BankingAskSafe {
       val destAccount = accounts(destAccountId)
       val amount = Math.abs(randomGen.nextDouble()) * 1000
 
-      srcAccount >!< new CreditMsg(self, amount, destAccount)
+      srcAccount ! new CreditMsg(self, amount, destAccount)
     }
   }
 
@@ -110,7 +110,7 @@ object BankingAskSafe {
       msg match {
         case dm: DebitMsg =>
           balance += dm.amount
-          sender() >!< new ReplyMsg()
+          sender() ! new ReplyMsg()
 
         case cm: CreditMsg =>
           balance -= cm.amount
@@ -119,7 +119,7 @@ object BankingAskSafe {
             cm.recipient.ask(packed.box) { future =>
               Await.result(future, Duration.Inf)
               // Once the transaction is complete, we alert the teller.
-              cm.sender >!< new ReplyMsg()
+              cm.sender ! new ReplyMsg()
             }
           }
 

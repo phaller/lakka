@@ -76,10 +76,10 @@ object ChameneosSafe {
               numMeetingsLeft -= 1
               val wc = waitingChameneo.get
               waitingChameneo = None
-              wc >!< message
+              wc ! message
             }
           } else {
-            message.sender >!< new ExitMsg(SafeActorRef[Message](self))
+            message.sender ! new ExitMsg(SafeActorRef[Message](self))
           }
         case _ => ???
       }
@@ -93,7 +93,7 @@ object ChameneosSafe {
     private var meetings: Int = 0
 
     override def init() = {
-      mall >!< new MeetMsg(color, SafeActorRef[Message](self))
+      mall ! new MeetMsg(color, SafeActorRef[Message](self))
     }
 
     override def receive(box: Box[Message])(implicit acc: CanAccess { type C = box.C }): Unit = {
@@ -115,7 +115,7 @@ object ChameneosSafe {
         case message: ChangeMsg =>
           color = message.color
           meetings += 1
-          mall >!< new MeetMsg(color, selfAR)
+          mall ! new MeetMsg(color, selfAR)
         case message: ExitMsg =>
           color = FADED
           log.info(s"Chameneo #${id} is now a faded color.")
