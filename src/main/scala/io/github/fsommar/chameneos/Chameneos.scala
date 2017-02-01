@@ -12,7 +12,7 @@ import Box._
 import lacasa.akka.{SafeActor, SafeActorRef}
 
 
-object ChameneosSafe {
+object Chameneos {
 
   def main(args: Array[String]): Unit = {
     val system = ActorSystem("Chameneos")

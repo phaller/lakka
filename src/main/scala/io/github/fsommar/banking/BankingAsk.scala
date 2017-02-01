@@ -17,7 +17,7 @@ import Box._
 import lacasa.akka.{SafeActor, SafeActorRef}
 
 
-object BankingAskSafe {
+object BankingAsk {
 
   def main(args: Array[String]) {
     val system = ActorSystem("BankingAsk")
