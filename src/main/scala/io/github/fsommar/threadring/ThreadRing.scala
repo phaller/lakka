@@ -126,17 +126,9 @@ private class PingStartActor(numActorsInRing: Int) extends SafeActor[Any] {
     Utils.loopAndThen(iter)({ elem =>
       val (loopActor, i) = elem
       val nextActor = ringActors((i + 1) % numActorsInRing)
-      mkBoxOf(new DataMessage(nextActor)) { packed =>
-        implicit val access = packed.access
-        val box: packed.box.type = packed.box
-        loopActor ! box
-      }
+      loopActor ! new DataMessage(nextActor)
     })({ () =>
-      mkBoxOf(new PingMessage(10)) { packed =>
-        implicit val access = packed.access
-        val box: packed.box.type = packed.box
-        ringActors(0) ! box
-      }
+      ringActors(0) ! new PingMessage(10)
     })
   }
 
