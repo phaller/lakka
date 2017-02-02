@@ -53,7 +53,7 @@ object Chameneos {
       1 to numChameneos foreach { i =>
         val color = colors(i % 3)
         val chameneoActor = SafeActorRef[Message](context.system.actorOf(Props(
-          new ChameneoActor(SafeActorRef[Message](self), i, color))))
+          new ChameneoActor(self, i, color))))
         SafeActorRef.init(chameneoActor)
       }
     }
@@ -79,7 +79,7 @@ object Chameneos {
               wc ! message
             }
           } else {
-            message.sender ! new ExitMsg(SafeActorRef[Message](self))
+            message.sender ! new ExitMsg(self)
           }
         case _ => ???
       }
@@ -93,33 +93,29 @@ object Chameneos {
     private var meetings: Int = 0
 
     override def init() = {
-      mall ! new MeetMsg(color, SafeActorRef[Message](self))
+      mall ! new MeetMsg(color, self)
     }
 
     override def receive(box: Box[Message])(implicit acc: CanAccess { type C = box.C }): Unit = {
       val msg: Message = box.extract(identity)
-      val selfAR = SafeActorRef[Message](self)
       msg match {
         case message: MeetMsg =>
           color = color.complement(message.color)
           meetings += 1
-          mkBoxOf(new ChangeMsg(color, selfAR)) { packed =>
+          mkBoxOf(new ChangeMsg(color, self)) { packed =>
             implicit val acc = packed.access
             message.sender.sendAndThen(packed.box) { () =>
-              mkBoxOf(new MeetMsg(color, selfAR)) { packed =>
-                implicit val acc = packed.access
-                mall ! packed.box
-              }
+              mall ! new MeetMsg(color, self)
             } 
           }
         case message: ChangeMsg =>
           color = message.color
           meetings += 1
-          mall ! new MeetMsg(color, selfAR)
+          mall ! new MeetMsg(color, self)
         case message: ExitMsg =>
           color = FADED
           log.info(s"Chameneo #${id} is now a faded color.")
-          mkBoxOf(new MeetingCountMsg(meetings, selfAR)) { packed =>
+          mkBoxOf(new MeetingCountMsg(meetings, self)) { packed =>
             implicit val acc = packed.access
             message.sender.sendAndThen(packed.box) { () =>
               context.stop(self)
