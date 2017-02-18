@@ -3,13 +3,10 @@
  */
 package io.github.fsommar.chameneos
 
+import io.github.fsommar.{TypedActor => SafeActor, TypedActorRef => SafeActorRef}
+
 import akka.actor.{ActorSystem, Props}
 import akka.event.Logging
-
-import lacasa.{Box, CanAccess, Safe}
-import Box._
-
-import lacasa.akka.{SafeActor, SafeActorRef}
 
 
 object Chameneos {
@@ -24,14 +21,6 @@ object Chameneos {
     SafeActorRef.init(mallActor)
     Thread.sleep(2000)
     system.terminate()
-  }
-
-  object Message {
-    implicit val MessageIsSafe = new Safe[Message] {}
-    implicit val MeetMsgIsSafe = new Safe[MeetMsg] {}
-    implicit val ChangeMsgIsSafe = new Safe[ChangeMsg] {}
-    implicit val MeetingCountMsgIsSafe = new Safe[MeetingCountMsg] {}
-    implicit val ExitMsgIsSafe = new Safe[ExitMsg] {}
   }
 
   sealed trait Message
@@ -58,8 +47,7 @@ object Chameneos {
       }
     }
 
-    override def receive(box: Box[Message])(implicit acc: CanAccess { type C = box.C }): Unit = {
-      val msg: Message = box.extract(identity)
+    override def receive(msg: Message): Unit = {
       msg match {
         case message: MeetingCountMsg =>
           numFaded += 1
@@ -74,9 +62,8 @@ object Chameneos {
               waitingChameneo = Some(message.sender)
             } else {
               numMeetingsLeft -= 1
-              val wc = waitingChameneo.get
+              waitingChameneo.get ! message
               waitingChameneo = None
-              wc ! message
             }
           } else {
             message.sender ! new ExitMsg(self)
@@ -96,18 +83,13 @@ object Chameneos {
       mall ! new MeetMsg(color, self)
     }
 
-    override def receive(box: Box[Message])(implicit acc: CanAccess { type C = box.C }): Unit = {
-      val msg: Message = box.extract(identity)
+    override def receive(msg: Message): Unit = {
       msg match {
         case message: MeetMsg =>
           color = color.complement(message.color)
           meetings += 1
-          mkBoxOf(new ChangeMsg(color, self)) { packed =>
-            implicit val acc = packed.access
-            message.sender.sendAndThen(packed.box) { () =>
-              mall ! new MeetMsg(color, self)
-            } 
-          }
+          message.sender ! new ChangeMsg(color, self)
+          mall ! new MeetMsg(color, self)
         case message: ChangeMsg =>
           color = message.color
           meetings += 1
@@ -115,12 +97,8 @@ object Chameneos {
         case message: ExitMsg =>
           color = FADED
           log.info(s"Chameneo #${id} is now a faded color.")
-          mkBoxOf(new MeetingCountMsg(meetings, self)) { packed =>
-            implicit val acc = packed.access
-            message.sender.sendAndThen(packed.box) { () =>
-              context.stop(self)
-            }
-          }
+          message.sender ! new MeetingCountMsg(meetings, self)
+          context.stop(self)
         case _ => ???
       }
     }

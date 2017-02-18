@@ -3,23 +3,11 @@
  */
 package io.github.fsommar.threadring
 
+import io.github.fsommar.{TypedActor => SafeActor, TypedActorRef => SafeActorRef}
+
 import akka.actor.{ActorSystem, Props}
 import akka.event.Logging
 
-import scala.spores._
-
-import lacasa.{Box, CanAccess, Safe, Utils}
-import Box._
-
-import lacasa.akka.{SafeActor, SafeActorRef}
-
-
-object Message {
-  implicit val messageIsSafe = new Safe[Message] {}
-  implicit val pingMessageIsSafe = new Safe[PingMessage] {}
-  implicit val exitMessageIsSafe = new Safe[ExitMessage] {}
-  implicit val dataMessageIsSafe = new Safe[DataMessage] {}
-}
 
 sealed trait Message
 
@@ -42,9 +30,6 @@ class ExitMessage(val exitsLeft: Int) extends Message {
 class DataMessage(val data: AnyRef) extends Message
 
 
-object Action {
-  implicit val actionIsSafe = new Safe[Action] {}
-}
 sealed abstract class Action
 final case class SendPingMessage(pm: PingMessage) extends Action
 final case class SendExitMessage(em: ExitMessage) extends Action
@@ -66,9 +51,8 @@ private class ThreadRingActor(id: Int, numActorsInRing: Int) extends SafeActor[M
 
   private var nextActor: SafeActorRef[Message] = _
 
-  def receive(msg: Box[Message])(implicit acc: CanAccess { type C = msg.C }): Unit = {
-    val action = msg.extract[Action](spore { (m: Message) =>
-      m match {
+  def receive(msg: Message): Unit = {
+    val action = msg match {
       case pm: PingMessage =>
         log.info(s"received PingMessage: pings left == ${pm.pingsLeft}")
         if (pm.hasNext) SendPingMessage(pm.next())
@@ -81,8 +65,7 @@ private class ThreadRingActor(id: Int, numActorsInRing: Int) extends SafeActor[M
       case dm: DataMessage =>
         log.info(s"received DataMessage: ${dm.data}")
         SetNextActor(dm.data.asInstanceOf[SafeActorRef[Message]])
-      }
-    })
+    }
 
     // carry out `action`
     action match {
@@ -93,14 +76,9 @@ private class ThreadRingActor(id: Int, numActorsInRing: Int) extends SafeActor[M
         nextActor ! em
 
       case SendLastExitMessage(em) =>
-        mkBoxOf(em) { packed =>
-          implicit val access = packed.access
-          val box: packed.box.type = packed.box
-          nextActor.sendAndThen(box) { () =>
-            log.info(s"stopping ${self.path}")
-            context.stop(self)
-          }
-        }
+        nextActor ! em
+        log.info(s"stopping ${self.path}")
+        context.stop(self)
 
       case StopSelf() =>
         log.info(s"stopping ${self.path}")
@@ -123,16 +101,15 @@ private class PingStartActor(numActorsInRing: Int) extends SafeActor[Any] {
     })
 
     val iter = ringActors.view.zipWithIndex.toIterator
-    Utils.loopAndThen(iter)({ elem =>
+    for (elem <- iter) {
       val (loopActor, i) = elem
       val nextActor = ringActors((i + 1) % numActorsInRing)
       loopActor ! new DataMessage(nextActor)
-    })({ () =>
-      ringActors(0) ! new PingMessage(10)
-    })
+    }
+    ringActors(0) ! new PingMessage(10)
   }
 
-  override def receive(box: Box[Any])(implicit acc: CanAccess { type C = box.C }) = ???
+  override def receive(msg: Any) = ???
 
 }
 
