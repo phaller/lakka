@@ -69,18 +69,18 @@ private class ThreadRingActor(id: Int, numActorsInRing: Int) extends SafeActor[M
   def receive(msg: Box[Message])(implicit acc: CanAccess { type C = msg.C }): Unit = {
     val action = msg.extract[Action](spore { (m: Message) =>
       m match {
-        case pm: PingMessage =>
-          log.info(s"received PingMessage: pings left == ${pm.pingsLeft}")
-          if (pm.hasNext) SendPingMessage(pm.next())
-          else SendExitMessage(new ExitMessage(numActorsInRing))
+      case pm: PingMessage =>
+        log.info(s"received PingMessage: pings left == ${pm.pingsLeft}")
+        if (pm.hasNext) SendPingMessage(pm.next())
+        else SendExitMessage(new ExitMessage(numActorsInRing))
 
-        case em: ExitMessage =>
-          if (em.hasNext) SendLastExitMessage(em.next())
-          else StopSelf()
+      case em: ExitMessage =>
+        if (em.hasNext) SendLastExitMessage(em.next())
+        else StopSelf()
 
-        case dm: DataMessage =>
-          log.info(s"received DataMessage: ${dm.data}")
-          SetNextActor(dm.data.asInstanceOf[SafeActorRef[Message]])
+      case dm: DataMessage =>
+        log.info(s"received DataMessage: ${dm.data}")
+        SetNextActor(dm.data.asInstanceOf[SafeActorRef[Message]])
       }
     })
 
